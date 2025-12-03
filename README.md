@@ -1,7 +1,7 @@
    
 ---
 
-# Desktop DNS
+# Desktop DNS - LPT edition
 
 ---
 
