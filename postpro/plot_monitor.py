@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from meshing.read_case import *
 
 
-def plot_monitor(casename):
+def plot_monitor(casename,maw=2500):
 
     # get current path
     path = os.getcwd()
@@ -81,26 +81,35 @@ def plot_monitor(casename):
     prop['mach'] = mach
     prop['vel'] = vel
     prop['alpha'] = alpha
+    prop['timesteps']=monitor['time'].size * monitor['iter'][0]
     
     target = {}     
     target['vin'] = v_in*np.ones(len(time))
     target['ain'] = a_in*np.ones(len(time))
     target['sin'] = s_in*np.ones(len(time))
+    target['poin'] = po_in*np.ones(len(time))
+
+
+    window_size = maw
+    weights = np.ones(window_size) / window_size
     
-     
     plt.figure(1)
 
     plt.subplot(2,2,1)
-    plt.plot(time,vel,'-k.',time,target['vin'])
+    tempplt = np.convolve(prop['vel'], weights, mode='valid')
+    prop['lastvel'] = tempplt[-1]
+    plt.plot(time,vel,'-k.',time,target['vin'],time[0:len(tempplt)],tempplt)
     plt.xlabel('time (s)')
     plt.ylabel('inlet velocity (m/s)')
-    plt.legend(['monitor','target'])
+    plt.legend(['monitor','target','moving average'])
     
     plt.subplot(2,2,2)
-    plt.plot(time,alpha,'-k.',time,target['ain'])
+    tempplt = np.convolve(prop['alpha'], weights, mode='valid')
+    prop['lastalpha'] = tempplt[-1]
+    plt.plot(time,alpha,'-k.',time,target['ain'],time[0:len(tempplt)],tempplt)
     plt.xlabel('time (s)')
     plt.ylabel('inlet flow angle (deg)')
-    plt.legend(['monitor','target'])
+    plt.legend(['monitor','target','moving average'])
     
     plt.subplot(2,2,3)
     plt.plot(time,np.exp(-(s-s_in)/rgas),'-k.',time,np.ones(len(time)))
@@ -108,11 +117,19 @@ def plot_monitor(casename):
     plt.ylabel('inlet entropy exp(-s/R)')
     plt.legend(['monitor','target'])
         
-    
+    # plt.subplot(2,2,4)
+    # plt.plot(time, p - p[-1],'-k.')
+    # plt.xlabel('time (s)')
+    # plt.ylabel('inlet pressure fluctuation (Pa)')
+
+
     plt.subplot(2,2,4)
-    plt.plot(time, p - p[-1],'-k.')
+    tempplt = np.convolve(prop['po'], weights, mode='valid')
+    prop['lastpo'] = tempplt[-1]
+    plt.plot(time, po,'-k.',time,target['poin'],time[0:len(tempplt)],tempplt)
     plt.xlabel('time (s)')
-    plt.ylabel('inlet pressure fluctuation (Pa)')
+    plt.ylabel('inlet total pressure (Pa)')
+    plt.legend(['monitor','target','moving average'])
     
     plt.show()  
 

@@ -3,11 +3,13 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import scienceplots
+import timeit
 
 from meshing.read_case import *
 from .grad import *
 
-def read_kcuts(casename,nfiles,plot_var,caxis):
+def read_kcuts(casename,nfiles,plot_var,caxis,DPI):
     
     
     flo = {}
@@ -61,6 +63,7 @@ def read_kcuts(casename,nfiles,plot_var,caxis):
     nt = 0
 
     for ncut in nfile:  
+        start_ncut = timeit.default_timer()
         nt = nt + 1
         for ib in range(len(blk)):
             
@@ -178,24 +181,52 @@ def read_kcuts(casename,nfiles,plot_var,caxis):
             flo[ib]['L_2'] = L_2
             flo[ib]['L_5'] = L_5
             
-        
-        # plot flow
-        plt.figure(1)
-        plt.axis('equal')
-            
+        with plt.style.context(['science', 'notebook']):
+            # plot flow
+            plt.figure(1)
+            plt.axis('equal')
                 
-        for ib in range(len(blk)):
-            x=blk[ib]['x']
-            y=blk[ib]['y']       
-            plt.pcolormesh(x,y, flo[ib][plot_var],shading='gouraud')
-            plt.clim(caxis)
-        
-        plt.set_cmap('seismic')
-        plt.colorbar()
     
-        plot_file = os.path.join(path,casename,'kcut_'+str(nt)+'.png')             
-        plt.savefig(plot_file)
-        plt.close()
+            plt.set_cmap('seismic')
+            
+            # for ib in range(len(blk)):
+            for ib in [2,3,4,5,6,7,8]:
+            # for ib in [4]:
+                x=blk[ib]['x']
+                y=blk[ib]['y']       
+                # y2=blk[ib]['y'] + 0.97
+                # y3=blk[ib]['y'] - 0.97
+                h1 = plt.pcolormesh(x,y, flo[ib][plot_var],shading='gouraud')
+                # h2 = plt.pcolormesh(x,y2, flo[ib][plot_var],shading='gouraud')
+                # h3 = plt.pcolormesh(x,y3, flo[ib][plot_var],shading='gouraud')
+                
+                # plt.clim(caxis)
+                h1.set_clim(caxis)
+                # h2.set_clim(caxis)
+                # h3.set_clim(caxis)
+            
+            plt.set_cmap('seismic')
+            cbar = plt.colorbar()
+            if plot_var=='vortz':
+                cbar.ax.set_title(r'$\Omega_z \ \mathrm{[s^{-1}]}$', pad=10)
+            plt.xlabel('x/Cax')
+            plt.ylabel('y/Cax')
+            plt.title(plot_var)
+            
+            plt.axis([0, 1.3, -1, 0.2]) # Blade closeup
+            plot_file = os.path.join(path,casename,'Vortz_Blade', 'kcut_'+str(nt)+'_Blade.png')             
+            plt.savefig(plot_file,dpi=DPI)
+    
+            
+            # plt.axis([0.63, 0.8, -0.13, 0.02]) # SS BL CLOSEUP LIKE RIGHT ON THE LSB
+            # plot_file = os.path.join(path,casename,'kcut_'+str(nt)+'_SSBLCLOSE.png')     
+            plt.axis([0.65, 1, -0.6, 0]) # SS BL closeup
+            plot_file = os.path.join(path,casename,'Vortz_SSBL', 'kcut_'+str(nt)+'_SSBL.png') 
+            plt.savefig(plot_file,dpi=DPI)
+            
+            plt.close()
+            stop_ncut = timeit.default_timer()
+            print('Time for Kcut', ncut, ': ', round((stop_ncut - start_ncut)/60,2), 'mins')  
 
     
     return flo,blk

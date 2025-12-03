@@ -45,11 +45,10 @@ def read_probe(casename):
     
     for i in range(nprobe):
         
-        temp = np.fromstring(fp.readline(),dtype=int,sep=' ')          
+        temp = np.fromstring(fp.readline(),dtype=int,sep=' ')   
         nb = temp[0]
         ii = temp[1]
         jj = temp[2]
-        
         
         probe[i] = {}
         
@@ -61,7 +60,7 @@ def read_probe(casename):
         f = open(file_path,'rb')
         q   = np.fromfile(f,dtype='float64',count=-1)
         f.close()
-        N = np.int(len(q)/6)
+        N = np.int64(len(q)/6)
         L = N*6
         temp = np.reshape(q[:L],[N,6])
         #temp = np.loadtxt(file_path)

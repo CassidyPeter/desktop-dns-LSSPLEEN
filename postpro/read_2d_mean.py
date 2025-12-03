@@ -2,14 +2,15 @@
 
 import os
 import numpy as np
-from meshing.read_case import *
+# from meshing.read_case import *
+from .read_case import *
 from .grad import *
 from .area import *
 
 def read_2d_mean(casename,nfiles):
     
-    nstats_prim = 11
-    nstats_bud = 6
+    nstats_prim = 11 # q variables
+    nstats_bud = 6 # q2 variables
     nstats = nstats_prim + nstats_bud
 
     flo = {}
@@ -219,17 +220,21 @@ def read_2d_mean(casename,nfiles):
         
         
         # entropy generation terms
-        Ds = (drus + drvs)      # LHS (flux derivative)
-        Dsr = (d2qx + d2qy)     # rev. term
+        Ds = (drus + drvs)      # LHS (entropy flux derivative)
+        Dsr = (d2qx + d2qy)     # rev. term (heat flux contribution)
         Ds_phi = diss_av/T      # dissipation due to time mean strain
         Ds_eps = dissT - Ds_phi # turbulent dissipation
         Ds_rans = ru*dsdx + rv*dsdy      # LHS (flux derivative)
+        Dsi = Ds + Dsr # irreversible entropy creation
+
+        # Mean entropy balance means Ds+Dsr should equal Ds_phi+Ds_eps, where Ds_phi is mean-flow viscous dissipation
+        # contribution and Ds_eps is turbulent dissipation contribution
        
         # estimate Kolmogorov length-scale
         #eps = dissT*T
         eps = Ds_eps*T
         Lkol = (((mu/ro)**3.0)/np.abs(eps))**0.25
-        res = np.sqrt(ar)/Lkol
+        res = np.sqrt(ar)/Lkol # Resolution
         
         flo[ib]['ro'] = ro
         flo[ib]['ru'] = ru
@@ -249,34 +254,36 @@ def read_2d_mean(casename,nfiles):
         flo[ib]['To'] = To
         flo[ib]['mach'] = mach
         
-        flo[ib]['Ds'] = Ds
-        flo[ib]['Dsi'] = Ds + Dsr  
-        flo[ib]['Dsr'] = Dsr
-        flo[ib]['Ds_phi'] = Ds_phi
-        flo[ib]['Ds_eps'] = Ds_eps
-        flo[ib]['Ds_rans'] = Ds_rans
+        flo[ib]['Ds'] = Ds           # entropy flux derivative
+        flo[ib]['Dsi'] = Ds + Dsr    # Total irreversible entropy flux (creation) 
+        flo[ib]['Dsr'] = Dsr         # heat flux contribution (reversible)
+        flo[ib]['Ds_phi'] = Ds_phi   # dissipation due to time mean strain
+        flo[ib]['Ds_eps'] = Ds_eps   # turbulent dissipation
+        flo[ib]['Ds_rans'] = Ds_rans # flux derivative using RANS
 
         flo[ib]['rus'] = rus
         flo[ib]['rvs'] = rvs
         
-        flo[ib]['dissT'] = dissT
+        flo[ib]['dissT'] = dissT     # Resolved loss generation due to dissipation
        
         flo[ib]['mu'] = mu
         
-        flo[ib]['tke'] = tke
-        flo[ib]['tu'] = tu
-        flo[ib]['turb_production'] = turb
-        flo[ib]['mut_opt'] = mut_opt
-        flo[ib]['S_'] = S_
+        flo[ib]['tke'] = tke                     # turbulent kinetic energy
+        flo[ib]['tu'] = tu                       # turbulence intensity as percent of inlet velocity
+        flo[ib]['turb_production'] = turb        # turbulence production
+        flo[ib]['dissipation_strain'] = diss_av  # dissipation
+        flo[ib]['mut_opt'] = mut_opt             # optimum eddy viscosity (for RANS)
+        flo[ib]['S_'] = S_                       # strain magnitude
         
-        flo[ib]['area'] = a
-        flo[ib]['res'] = res
+        flo[ib]['area'] = a                      # cell i-j area
+        flo[ib]['res'] = res                     # ratio of i-j cell dimension to estimated Kolmogorov length
+
+        flo[ib]['ruu'] = ruu
+        flo[ib]['rvv'] = rvv
+        flo[ib]['rww'] = rww
+        flo[ib]['ruv'] = ruv
         
         
 
     return flo,blk,total_time 
 
-
-
-       
-           

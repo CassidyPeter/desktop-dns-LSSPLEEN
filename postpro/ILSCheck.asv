@@ -1,0 +1,119 @@
+clc; clear; close all;
+
+% Plot the U-velocity trace
+% U is velocity vector of 7000 points
+U = readmatrix("C:\Users\cassidy\OneDrive - vki.ac.be\Documents\Technical\CAD and CFD\desktop-dns-main\outputs\main\task3\ProbeData.csv");
+Fs = 1/(8.197e-8 * 10);
+L=length(U); % Number of samples
+t=(0:L-1)/(Fs); % Time vector
+figure('Position',[50 50 1000 800])
+plot(t,U,'LineWidth',3); % Plot the velocity trace
+title('U-velocity trace');
+ylabel('Velocity $u \ [\mathrm{m/s}]$', 'Interpreter','latex');
+xlabel('Time $[\mathrm{s}]$', 'Interpreter','latex');
+set(gca,'fontsize',25)
+
+% Perform FFT analysis on the U-velocity signal and plot Amplitude spectrum
+aFData=fft(U); % Take FFT of U signal
+n=L/2; % FFT will yield half the number of unique points
+aFreq=Fs*(1:n)/n; % Frequency array (half the length of signal)
+aFMag=abs(aFData(1:n)/L); % Normalized Magnitude array (half the length of signal)
+% figure;
+% semilogx(aFreq(2:n),aFMag(2:n)) % Plot frequency against magnitude
+% title('Single-Sided Amplitude Spectrum of U(t)')
+% xlabel('Frequency (Hz)')
+% ylabel('|U(f)| (ft/s)')
+
+% Plot the energy density spectrum
+Power=abs(fft(U)).^2/L; %Power is the magnitude squared by L
+Energy=Power/Fs;
+figure('Position',[50 50 1000 800])
+loglog(aFreq,Energy(2:L/2+1), 'linewidth',3)
+title('Energy Density Spectrum')
+xlabel ('Frequency $[\mathrm{Hz}]$', 'Interpreter','latex');
+ylabel ('Energy, $E(f)=Power/frequency \ [\mathrm{m^2/s}]$', 'Interpreter','latex');
+set(gca,'fontsize',25)
+
+% Calculate the integral length scale (macro scale) Roach Eqn 15
+uprime=std(U);
+uprimesquared=uprime^2;
+Ubar=mean(U);
+Tu=uprime/Ubar;
+Ef0=mean(Energy(2:100));
+IntegralLengthScale=Ef0*mean(U)/(4*uprimesquared);
+
+% Calculate the dissipation length scale (micro scale) Roach Eqn 8
+for i=1:length(aFreq)
+ Y(i)=aFreq(i)*aFreq(i)*Energy(i);
+end
+Z=trapz(aFreq,Y); % Use trapezoid rule for integration
+Z=Z*2*pi^2/(Ubar^2*uprimesquared);
+DissipationScale=sqrt(1/Z);
+
+%%
+
+fprintf('Turbulence intensity = %.2f %% \n', Tu*100)
+fprintf('Integral length scale = %.2f mm \n', IntegralLengthScale*1000)
+fprintf('Dissipation length scale = %.2f mm \n', DissipationScale*1000)
+
+
+%% Calculate statistical uncertainty in mean
+N = length(U);
+dt = 1/Fs;
+T = N * dt;                 % Total averaging time
+sigma = std(U);            % Sample standard deviation
+
+% Autocorrelation to find T'_turb (integral timescale)
+% Normalize autocorrelation
+[u_ac, lags] = xcorr(U - Ubar, 'unbiased');
+u_ac = u_ac(lags >= 0); % Use only non-negative
+lags = lags(lags >= 0);
+R = u_ac / u_ac(1);
+
+% Estimate integral timescale as integral of R up to first zero crossing
+zero_idx = find(R < 0, 1);  % First zero crossing
+if isempty(zero_idx)
+    warning('Autocorrelation does not cross zero. Using full range.');
+    zero_idx = length(R);
+end
+T_turb = trapz(lags(1:zero_idx)*dt, R(1:zero_idx));
+
+% Compute uncertainty
+rel_error = (sigma / Ubar) * sqrt(T_turb / T);
+
+running_mean = cumsum(U) ./ (1:N)';
+
+figure('Position',[50 50 1000 800])
+hold on
+plot(lags*dt, R, 'LineWidth',3)
+xline(lags(zero_idx) * dt, '--r', 'First zero-crossing');
+yline(0, '--k')
+title('Autocorrelation')
+xlabel('Lag time $\tau \ [\mathrm{s}]$', 'Interpreter','latex')
+ylabel('Autocorrelation $\rho ( \tau )$', 'Interpreter','latex')
+set(gca, 'fontsize', 25)
+grid minor
+
+figure('Position',[50 50 1000 800])
+hold on;
+plot((1:N)*dt, running_mean, 'LineWidth', 3);
+yline(Ubar, '--k', 'Sample Mean');
+yline(Ubar*1.001, '--k', '0.1% upper bound');
+yline(Ubar*0.999, '--k', '0.1% lower bound');
+xlabel('Time [$\mathrm{s}$]', 'Interpreter','latex');
+ylabel('Running Mean of U', 'Interpreter','latex');
+title('Convergence of Running Mean');
+set(gca, 'fontsize', 25)
+grid minor
+
+% OUTPUT 
+fprintf('Estimated mean of Ubar = %.4f m/s\n', Ubar);
+fprintf('Standard deviation sigma = %.4f\n', sigma);
+fprintf('Integral timescale T_turb = %.4f s\n', T_turb);
+fprintf('Total averaging time T = %.4f s\n', T);
+fprintf('Relative uncertainty in mean = %.2f%%\n', 100 * rel_error);
+
+
+% Can I leverage more from 4A12 notes?
+
+

@@ -252,8 +252,8 @@ def initial_guess(mesh,geom,bcs,gas,n,nj,Yp):
    plt.plot(xi,yi,'-g.')   
    plt.plot(xi2,yi2+pitch,'-r.')   
    plt.plot(xi,yi+pitch,'-g.')   
-   plt.plot(x,y,'k')
-   plt.plot(np.transpose(x),np.transpose(y),'k')
+   plt.plot(x,y,'k', linewidth=0.5)
+   plt.plot(np.transpose(x),np.transpose(y),'k', linewidth=0.5)
    
    #plt.pcolormesh(x,y,p,shading='gouraud')
    #plt.title('initial guess of pressure field')

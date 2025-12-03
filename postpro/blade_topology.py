@@ -147,8 +147,8 @@ def blade_topology(xprof,yprof,pitch,Lup,Ldn,Lo,stag,npp,ywall,msmooths,cor_fac)
     # Creat initial mesh to solve for block boundaries
     
     # Block 1
-    ni=np.int(npp*np.ceil(Lup / sle))
-    nj=np.int(npp*np.ceil((y2 - y1) / sle))
+    ni=int(npp*np.ceil(Lup / sle))
+    nj=int(npp*np.ceil((y2 - y1) / sle))
     fi=np.linspace(0,1,ni)
     fj=np.linspace(0,1,nj)
     
@@ -176,8 +176,8 @@ def blade_topology(xprof,yprof,pitch,Lup,Ldn,Lo,stag,npp,ywall,msmooths,cor_fac)
     blk[0]['y'] = fy(fj,fi)
     
     # Block 2
-    ni=np.int(npp*np.ceil(Lup / sle))
-    nj=np.int(npp*np.ceil((y9 - y8) / sle))
+    ni=int(npp*np.ceil(Lup / sle))
+    nj=int(npp*np.ceil((y9 - y8) / sle))
     fi=np.linspace(0,1,ni)
     fj=np.linspace(0,1,nj)  
     nic=2
@@ -196,8 +196,8 @@ def blade_topology(xprof,yprof,pitch,Lup,Ldn,Lo,stag,npp,ywall,msmooths,cor_fac)
     blk[1]['y'] = fy(fj,fi) 
     
     # Block 3
-    ni=np.int(npp*np.ceil((y2 - y1) / sle)) 
-    nj=np.int(npp*np.ceil(Lo / sle))
+    ni=int(npp*np.ceil((y2 - y1) / sle)) 
+    nj=int(npp*np.ceil(Lo / sle))
     fi=np.linspace(0,1,ni)
     fj=np.linspace(0,1,nj)    
     xp,yp,dum,dum=clip_curve(xo,yo,imin3,imin2,ni)
@@ -222,8 +222,8 @@ def blade_topology(xprof,yprof,pitch,Lup,Ldn,Lo,stag,npp,ywall,msmooths,cor_fac)
     
     
     # Block 4
-    ni=np.int(npp*np.ceil(ssurf / sle))
-    nj=np.int(npp*np.ceil(Lo / sle))
+    ni=int(npp*np.ceil(ssurf / sle))
+    nj=int(npp*np.ceil(Lo / sle))
     fi=np.linspace(0,1,ni)
     fj=np.linspace(0,1,nj)    
     xp,yp,dum,dum=clip_curve(xo,yo,imin3,imin6,ni)
@@ -248,8 +248,8 @@ def blade_topology(xprof,yprof,pitch,Lup,Ldn,Lo,stag,npp,ywall,msmooths,cor_fac)
     
 
     # Block 5
-    ni=np.int(npp*np.ceil(ssurf / sle))
-    nj=np.int(npp*np.ceil(Lo / sle))
+    ni=int(npp*np.ceil(ssurf / sle))
+    nj=int(npp*np.ceil(Lo / sle))
     fi=np.linspace(0,1,ni)
     fj=np.linspace(0,1,nj)    
     xp,yp,dum,dum=clip_curve(xo,yo,imin2,imin5,ni)
@@ -277,8 +277,8 @@ def blade_topology(xprof,yprof,pitch,Lup,Ldn,Lo,stag,npp,ywall,msmooths,cor_fac)
 
     
     # Block 6
-    ni=np.int(npp*np.ceil(ssurf / sle))
-    nj=np.int(npp*np.ceil((y9 - y8) / sle))
+    ni=int(npp*np.ceil(ssurf / sle))
+    nj=int(npp*np.ceil((y9 - y8) / sle))
     fi=np.linspace(0,1,ni)
     fj=np.linspace(0,1,nj)    
     xp2,yp2,dum,dum=clip_curve(xo,yo,imin3,imin6,ni)
@@ -305,8 +305,8 @@ def blade_topology(xprof,yprof,pitch,Lup,Ldn,Lo,stag,npp,ywall,msmooths,cor_fac)
     blk[5]['y'] = fy(fj,fi) 
     
     # Block 7
-    ni=np.int(npp*np.ceil((y5 - y4) / sle))
-    nj=np.int(npp*np.ceil(Lo / sle))
+    ni=int(npp*np.ceil((y5 - y4) / sle))
+    nj=int(npp*np.ceil(Lo / sle))
     fi=np.linspace(0,1,ni)
     fj=np.linspace(0,1,nj)    
     xp,yp,dum,dum=clip_curve(xo,yo,imin5,imin6,ni)
@@ -331,8 +331,8 @@ def blade_topology(xprof,yprof,pitch,Lup,Ldn,Lo,stag,npp,ywall,msmooths,cor_fac)
     blk[6]['y'] = fy(fj,fi)  
     
     # Block 8
-    ni=np.int(npp*np.ceil(Ldn / sle))
-    nj=np.int(npp*np.ceil((y5 - y4) / sle))
+    ni=int(npp*np.ceil(Ldn / sle))
+    nj=int(npp*np.ceil((y5 - y4) / sle))
     fi=np.linspace(0,1,ni)
     fj=np.linspace(0,1,nj)    
     xp,yp,dum,dum=clip_curve(xo,yo,imin5,imin6,nj)
@@ -357,8 +357,8 @@ def blade_topology(xprof,yprof,pitch,Lup,Ldn,Lo,stag,npp,ywall,msmooths,cor_fac)
     blk[7]['y'] = fy(fj,fi) 
     
     # Block 9
-    ni=np.int(npp*np.ceil(Ldn / sle))
-    nj=np.int(npp*np.ceil((y9 - y8) / sle))
+    ni=int(npp*np.ceil(Ldn / sle))
+    nj=int(npp*np.ceil((y9 - y8) / sle))
     fi=np.linspace(0,1,ni)
     fj=np.linspace(0,1,nj) 
     nic=2

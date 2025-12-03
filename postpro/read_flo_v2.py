@@ -1,13 +1,14 @@
 # Copyright (c) 2023, University of Cambridge, all rights reserved. Written by Andrew Wheeler, University of Cambridge
-
+# Updated by PC in August 2025 to add Q-Criterion and Lambda-2 and enable 3D data to be read in
 
 import os
 import numpy as np
 from meshing.read_case import *
 from .grad import *
+from .grad3d import *
 from .area import *
 
-def read_flo(casename):
+def read_flo_v2(casename):
     
     
     flo = {}
@@ -34,6 +35,13 @@ def read_flo(casename):
     cv = cp/gam
     rgas = cp-cv     
 
+    # spanwise resolution
+    nk = case['solver']['nk']
+    if nk > 1:
+        Lz = case['solver']['span']
+        dz = Lz / (nk-1) if nk > 1 else 1.0
+
+    
     for ib in range(len(blk)):
         
         x = blk[ib]['x']
@@ -41,7 +49,6 @@ def read_flo(casename):
         flo[ib] = {}
           
         ni,nj = np.shape(blk[ib]['x'])
-        nk = case['solver']['nk']
 
         if(nk>1):
            ro = np.zeros([ni,nj,nk])
@@ -55,50 +62,8 @@ def read_flo(casename):
            rv = np.zeros([ni,nj])
            rw = np.zeros([ni,nj])
            Et = np.zeros([ni,nj])
-        
-    
-        if version == 'cpu':
-            flow_name = 'flo2_' + str(ib+1)
-            ind_name =  'nod2_' + str(ib+1)
-            
-            flow_file = os.path.join(path,casename,flow_name)
-            ind_file = os.path.join(path,casename,ind_name)
-            
-            f = open(flow_file,'rb')
-            g = open(ind_file,'rb')
-            
-            q   = np.fromfile(f,dtype='float64',count=-1)
-            ind = np.fromfile(g,dtype='uint32',count=-1)
-            
-            f.close()
-            g.close
-            
-            N = np.int(len(q)/5)
-            M = np.int(len(ind)/3)
-            
-            q = np.reshape(q,[5,N],order='F') # make sure to reshape with fortran rule!
-            ind = np.reshape(ind,[3,M],order='F') # make sure to reshape with fortran rule!
-            if(nk>1):
-                for n in range(M):
-                    i = ind[0,n]-1
-                    j = ind[1,n]-1
-                    k = ind[2,n]-1
-                    ro[i,j,k] = q[0,n]
-                    ru[i,j,k] = q[1,n]
-                    rv[i,j,k] = q[2,n]
-                    rw[i,j,k] = q[3,n]
-                    Et[i,j,k] = q[4,n]
-            else:
-                for n in range(M):
-                    i = ind[0,n]-1
-                    j = ind[1,n]-1
-                    ro[i,j] = q[0,n]
-                    ru[i,j] = q[1,n]
-                    rv[i,j] = q[2,n]
-                    rw[i,j] = q[3,n]
-                    Et[i,j] = q[4,n]
                     
-        elif version == 'gpu':
+        if version == 'gpu':
         
             flow_name = 'flow_' + str(ib+1)
             rans_name = 'rans_' + str(ib+1)
@@ -126,7 +91,7 @@ def read_flo(casename):
             Et = q[4,:,:,:]
             
         
-        # get derived quantities
+        # derived quantities
         u = ru/ro
         v = rv/ro
         w = rw/ro
@@ -140,17 +105,59 @@ def read_flo(casename):
         To = T*(1.0 + (gam-1)*0.5*mach*mach)
         po = p*((To/T)**(gam/(gam-1.0)))
         
-        dudx = np.zeros([ni,nj,nk])
-        dudy = np.zeros([ni,nj,nk])
         
-        dvdx = np.zeros([ni,nj,nk])
-        dvdy = np.zeros([ni,nj,nk])
+        # dudx = np.zeros([ni,nj,nk])
+        # dudy = np.zeros([ni,nj,nk])
+        
+        # dvdx = np.zeros([ni,nj,nk])
+        # dvdy = np.zeros([ni,nj,nk])
 
+        # velocity gradients
+        dudx = np.zeros_like(ro)
+        dudy = np.zeros_like(ro)
+        dvdx = np.zeros_like(ro)
+        dvdy = np.zeros_like(ro)
+        dwdx = np.zeros_like(ro)
+        dwdy = np.zeros_like(ro)
+
+        # compute x,y derivatives slice-by-slice
         for k in range(nk):
-            dudx[:,:,k],dudy[:,:,k] = grad(u[:,:,k],x,y)
-            dvdx[:,:,k],dvdy[:,:,k] = grad(v[:,:,k],x,y)
+            dudx[:,:,k], dudy[:,:,k] = grad(u[:,:,k], x, y)
+            dvdx[:,:,k], dvdy[:,:,k] = grad(v[:,:,k], x, y)
+            dwdx[:,:,k], dwdy[:,:,k] = grad(w[:,:,k], x, y)
+
+        
+        # z-derivatives by central difference in k
+        dudz = np.gradient(u, dz, axis=2, edge_order=2) if nk > 1 else np.zeros_like(u)
+        dvdz = np.gradient(v, dz, axis=2, edge_order=2) if nk > 1 else np.zeros_like(v)
+        dwdz = np.gradient(w, dz, axis=2, edge_order=2) if nk > 1 else np.zeros_like(w)
+        
+        # Q-criterion and lambda2
+        Q = np.zeros_like(ro)
+        lambda2 = np.zeros_like(ro)
 
 
+
+        for i in range(ni):
+            for j in range(nj):
+                for k in range(nk):
+                    gradU = np.array([
+                        [dudx[i,j,k], dudy[i,j,k], dudz[i,j,k]],
+                        [dvdx[i,j,k], dvdy[i,j,k], dvdz[i,j,k]],
+                        [dwdx[i,j,k], dwdy[i,j,k], dwdz[i,j,k]]
+                    ])
+                    S = 0.5 * (gradU + gradU.T)
+                    Omega = 0.5 * (gradU - gradU.T)
+                    Q[i,j,k] = 0.5 * (np.sum(Omega**2) - np.sum(S**2))
+                    S2_Om2 = S @ S + Omega @ Omega
+                    eigs = np.linalg.eigvalsh(S2_Om2)
+                    lambda2[i,j,k] = eigs[1]  # second largest eigenvalue
+
+
+
+
+        
+        
         vortz = dvdx - dudy
         a = area(x,y)
 
@@ -177,5 +184,9 @@ def read_flo(casename):
 
         flo[ib]['alpha'] = alpha
         flo[ib]['vel'] = vel
+
+        flo[ib]['Q'] = Q
+        flo[ib]['lambda2'] = lambda2
+
 
     return flo,blk

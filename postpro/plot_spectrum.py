@@ -115,18 +115,21 @@ def plot_spectrum(casename,blocks,iexclude):
         
     dy = yi[1]-yi[0]
     
-    Ek = (v1*np.conjugate(v1) + v2*np.conjugate(v2) + v3*np.conjugate(v3))/np.float(m*nj)
+    # Ek = (v1*np.conjugate(v1) + v2*np.conjugate(v2) + v3*np.conjugate(v3))/np.float(m*nj)
+    Ek = (v1*np.conjugate(v1) + v2*np.conjugate(v2) + v3*np.conjugate(v3))/float(m*nj)
     
     Ek = np.real(Ek) # convert to real  
     
     f = np.linspace(1.0e-12,1.0/dy,nj)
       
     
-    imid = np.int(nj/2)
+    # imid = np.int(nj/2)
+    imid = int(nj/2)
     imax = np.argmax(Ek)
     imin = np.argmin(Ek)
     iplot = np.array(range(1,imid))    
-    iref = np.int(imax*0.75 + imin*0.25)
+    # iref = np.int(imax*0.75 + imin*0.25)
+    iref = int(imax*0.75 + imin*0.25)
 
     # Kolmogorov for inertial range
     Ekm = np.mean(Ek)

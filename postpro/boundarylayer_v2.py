@@ -1,5 +1,5 @@
 # Copyright (c) 2023, University of Cambridge, all rights reserved. Written by Andrew Wheeler, University of Cambridge
-
+# Modified extensively by Peter Cassidy
 
 import os
 import numpy as np
@@ -10,8 +10,9 @@ from meshing.read_case import *
 from .read_flo import *
 from .grad import *
 from .read_2d_mean import *
+from scipy import spatial
 
-def boundarylayer(casename,*args):
+def boundarylayer_v2(casename,*args):
     
     flo = {}
         
@@ -75,15 +76,32 @@ def boundarylayer(casename,*args):
     zplus = np.asarray([],dtype=float)
     tplus = np.asarray([],dtype=float)
     tauw  = np.asarray([],dtype=float)
+    Retheta=np.asarray([],dtype=float)
+    Retau = np.asarray([],dtype=float)
+    Res   = np.asarray([],dtype=float)
     cf    = np.asarray([],dtype=float)
     XX    = np.asarray([],dtype=float)
     YY    = np.asarray([],dtype=float)
-    
+    SS    = np.asarray([],dtype=float)
+    Ue    = np.asarray([],dtype=float) # BL edge velocity
+    Pe    = np.asarray([],dtype=float) # BL edge pressure
+    beta  = np.asarray([],dtype=float) # Clauser parameter
+    K     = np.asarray([],dtype=float) # pressure gradient parameter
+    lamb  = np.asarray([],dtype=float) # Thwaite's criterion
+    uplus_profile = []
+    yplus_profile = []
+    r_profile = []
+    vel_profile = []
+    BL_bool = {} # for loss breakdown masks
     
     
         
     ns = -1
-    for nb in range(Nb):
+    # Loop through just blocks containing BL and in specific order, SS 2,4,6 -> PS 3
+    # for nb in range(Nb):
+    for nb in [2,4,6,3]:
+
+        BL_bool[nb] = []
         
         x = blk[nb]['x']
         y = blk[nb]['y']
@@ -189,8 +207,8 @@ def boundarylayer(casename,*args):
                pr = pr.T   
                diss_strain = diss_strain.T
                mut= mut.T
-               
-            if(jp_wall):
+
+            if(jp_wall): # basically all blocks are of jp_wall type
                x  = x[:,::-1]
                y  = y[:,::-1]
                ro = ro[:,::-1]
@@ -204,6 +222,21 @@ def boundarylayer(casename,*args):
                pr = pr[:,::-1]   
                diss_strain = diss_strain[:,::-1]
                mut= mut[:,::-1]
+
+               if nb==6:
+                   x  = x[::-1,:]
+                   y  = y[::-1,:]
+                   ro = ro[::-1,:]
+                   mu = mu[::-1,:]
+                   u  = u[::-1,:]
+                   v  = v[::-1,:]
+                   w  = w[::-1,:]
+                   p  = p[::-1,:]
+                   po = po[::-1,:]
+                   To = To[::-1,:]
+                   pr = pr[::-1,:]   
+                   diss_strain = diss_strain[::-1,:]
+                   mut= mut[::-1,:]
                
             
             ni,nj=np.shape(x)
@@ -231,11 +264,12 @@ def boundarylayer(casename,*args):
             
             edgej = np.zeros(ni)
             
-            
+            if nb==3:
+                ns = -1
             for i in range(ni):
-                
                 ns = ns + 1
-                
+
+                # Compute local tangents
                 if(i==0):
                    dxt = (x[i+1,0]-x[i,0])    
                    dyt = (y[i+1,0]-y[i,0])    
@@ -252,11 +286,18 @@ def boundarylayer(casename,*args):
                       hprev = d1[ns-1]/d2[ns-1]
                    else:
                       hprev = 2.5   
-                   if(hprev<0):hprev = 2.50
-                   Del = d2[ns-1]*(3.15 + 1.72/(hprev-1.0)) + d1[ns-1]   
-                   #print(hprev,d0[ns-1],d1[ns-1],d2[ns-1])                   
-                else:
+                   if(hprev<0):
+                       hprev = 2.50
+                   Del = d2[ns-1]*(3.15 + 1.72/(hprev-1.0)) + d1[ns-1] # BL thickness correlation from 1973 paper (see Drela paper on VII) 
+                   # print('hprev:',hprev,'del:',d0[ns-1],'disp:',d1[ns-1],'mom:',d2[ns-1])      
+                   # print('nb:',nb,'i:',i,'ns:',ns)
+                else: # first point on surface
                    Del = 1.0e-4
+                   # print('nb:',nb,'i:',i,'ns:',ns)
+                # print('hprev:',hprev,'del:',d0[ns-1],'disp:',d1[ns-1],'mom:',d2[ns-1])      
+                
+                # print('nb:',nb,'i:',i,'ns:',ns)
+                # print('Del:', Del)
                 
                 ydist = y[i,3]-y[i,0]
                 xdist = x[i,3]-x[i,0]
@@ -276,15 +317,18 @@ def boundarylayer(casename,*args):
                 dissprof = diss_strain[i,:]/ro[i,:]
                 muprof = mu[i,:]
                 mutprof = mut[i,:]
+                pprof = p[i,:]
                 
                 nprof = 10000
                 
-                xd = xprof-xprof[0]
-                yd = yprof-yprof[0]
+                xd = xprof-xprof[0] # displacement from wall for each profile point
+                yd = yprof-yprof[0] # displacement from wall for each profile point
                 #rprof = np.sqrt(xd*xd + yd*yd)
                 #velprof = np.sqrt(uprof*uprof + vprof*vprof + wprof*wprof)
-                
+
+                # wall normal coordinate using r projected onto unit normal rprof(j)=abs(r dot nhat)
                 rprof = np.abs(-xd*dyt + yd*dxt)/np.sqrt(dxt*dxt + dyt*dyt)
+                # Streamwise tangential velocity using u,v projected into unit tangent velprof(j)=u dot that
                 velprof =(uprof*dxt + vprof*dyt)/np.sqrt(dxt*dxt + dyt*dyt)
                 
                 dvel = velprof[2]  
@@ -298,16 +342,32 @@ def boundarylayer(casename,*args):
                 xp = yp*np.sqrt(dxt*dxt + dyt*dyt)/rprof[1]
                 zp = yp*delz/rprof[1]
                 tp = row*ut**2 /muw
+
+                yp_profile = ut*row*rprof[:]/muw
+                up_profile = velprof[:]/ut
+                
                 
                 yplus=np.append(yplus,yp)
                 xplus=np.append(xplus,xp)
                 zplus=np.append(zplus,zp)
                 tplus=np.append(tplus,tp)
+
+                yplus_profile.append(yp_profile)
+                uplus_profile.append(up_profile)
+                r_profile.append(rprof)
+                vel_profile.append(velprof)
                
                 tauw=np.append(tauw,tw)
-                cf=np.append(cf,tw/(0.5*ruinf[i]*uinf[i]))
+                # cf=np.append(cf,tw/(0.5*ruinf[i]*uinf[i])) # proper method - uses calculated ro and U
+                cf=np.append(cf,tw/(0.5*1.2048*10.33**2)) # to try match Argo and MISES Cf (uses constants)
                 XX=np.append(XX,xprof[0])
                 YY=np.append(YY,yprof[0])
+
+                # Surface length s (confusingly SS is actually surface length for both ss and ps, but I kept in the same style as XX,YY)
+                if(ns>0):
+                    SS=np.append(SS, np.sqrt((XX[-1]-XX[-2])**2 + (YY[-1]-YY[-2])**2)+SS[-1])
+                else:
+                    SS=np.append(SS,0)
                 
                 ri = np.linspace(np.min(rprof),np.max(rprof),nprof)
                 
@@ -340,31 +400,43 @@ def boundarylayer(casename,*args):
 
                 f = interp1d(rprof, dissprof, kind='cubic')
                 dissi =f(ri)
+
+                f = interp1d(rprof, pprof, kind='cubic')
+                pi =f(ri)
         
                 vmagi = np.sqrt(ui*ui + vi*vi + wi*wi)
-                
-                if(ns<100): # correction near LE
-                   ii = vmagi < uinf[i]*0.99999
-                   
-                else:
-                   ii = ri < Del
+
+                # This is Andy's method of getting ii using a LE correction but doesn't work for slow forming LPT BLs
+                # if(ns<100): # correction near LE
+                #    ii = vmagi < uinf[i]*0.99999
+                # else:
+                #    ii = ri < Del
+
+                # New version that just picks smallest BL edge - but from testing, the 0.99uinf is never correct
+                ii_vel = vmagi < 0.99999 * uinf[i]   # δ99 velocity criterion - for near to LE
+                ii_del = ri < Del                 # correlation criterion - for everywhere else
+                # Pick whichever gives the smaller boundary layer edge
+                ii = np.logical_and(ii_vel, ii_del)
                   
                 edgen = np.argmax(ri*ii)
                 edgej[i] = np.argmin(abs(rprof-ri[edgen]))
-                   
+                
                    
                 dx = xi[1:]-xi[:-1]
                 dy = yi[1:]-yi[:-1]
-                
+
+                # Wall normal spacing 
                 dely = np.abs(-dx*dyt + dy*dxt)/np.sqrt(dxt*dxt + dyt*dyt) 
-                if(edgen > (len(dely)-1)): edgen = len(dely)-1                
+                if(edgen > (len(dely)-1)): 
+                    edgen = len(dely)-1                
                 del_now = np.sum(dely[:edgen])
+
 
                 # recompute bl edge estimate
                 if(del_now > Del):
                    edgen = np.argmax(ri*ii)
                    edgej[i] = np.argmin(abs(rprof-ri[edgen]))
-                
+
                 
                 delv = vmagi[1:]-vmagi[:-1]
                  
@@ -377,9 +449,13 @@ def boundarylayer(casename,*args):
                 ronow  =  (roi[1:] + roi[:-1])*0.5
                 munow  =  (mui[1:] + mui[:-1])*0.5
                 mutnow = (muti[1:]+ muti[:-1])*0.5
-                    
+
                 
                 vnow = (uav*dxt + vav*dyt)/np.sqrt(dxt*dxt + dyt*dyt) 
+                # if ns==0:
+                #     print('uav', uav, 'dxt', dxt, 'vav', vav, 'dyt', dyt)
+                    # vav is negative
+                    
                 diss_av = (munow/ronow)*(delv/dely)*(delv/dely) # 
                 diss_model = (munow*mutnow/ronow)*(delv/dely)*(delv/dely) # modelled dissipation using turbulent viscosity mu_t
   
@@ -387,28 +463,56 @@ def boundarylayer(casename,*args):
   
                 x0=np.append(x0,xi[edgen])
                 y0=np.append(y0,yi[edgen])
+
+                Ue=np.append(Ue,uinf[i])
+                Pe=np.append(Pe,pi[edgen])
+
+                # BL masks for loss breakdown (BL edge is found with interped high resolution y profile, so finding closest block coord)
+                search = np.array([x[i,:], y[i,:]])
+                dists = (search[0] - xi[edgen])**2 + (search[1] - yi[edgen])**2
+                closest_idx = np.argmin(dists)
+                mask = np.arange(search.shape[1]) <= closest_idx
+                BL_bool[nb].append(mask[::-1])
+
                 
                 vn    = vnow/uinf[i]
                 rvn   = ronow*vnow/ruinf[i]
                 rvdef = 1.0 - rvn
                 vdef  = 1.0 - vn 
                 v2def = 1.0 - vn*vn
-                                
+
+                # Data all normalised to axial chord
                 d0=np.append(d0,np.sum(dely[:edgen])) # delta99
                 d1=np.append(d1,np.sum(rvdef[:edgen]*dely[:edgen])) # # Displacement thickness
                 d2=np.append(d2,np.sum(rvn[:edgen]*vdef[:edgen]*dely[:edgen])) # Momentum thickness
                 d3=np.append(d3,np.sum(rvn[:edgen]*v2def[:edgen]*dely[:edgen])) # Energy thickness
+                # if ns==0:
+                    # print('d1:', d1, 'd2:', d2, 'rvn[:edgen]', rvn[:edgen], 'vdef[:edgen]', vdef[:edgen], 'rvdef[:edgen]', rvdef[:edgen])
+                    # rvn is issue! negative for some reason
+                    # print('ronow:', ronow, 'vnow:', vnow, 'ruinf[i]:', ruinf[i])
+                    # ruinf is quite high, and vnow is negative (because uav and vav are kinda flipped sign from each other in first few points)
                 
                 d1i=np.append(d1i,np.sum(vdef[:edgen]*dely[:edgen])) # ? inviscid?
                 d2i=np.append(d2i,np.sum(vn[:edgen]*vdef[:edgen]*dely[:edgen])) # ? inviscid?
                 d3i=np.append(d3i,np.sum(vn[:edgen]*v2def[:edgen]*dely[:edgen])) # ? inviscid?
                 
-                # d9=np.append(d9,   np.sum(diss_av[:edgen]*dely[:edgen])) # Dissipation due to mean strain MAYBE
-                # d10=np.append(d10, np.sum(turbav[:edgen]*dely[:edgen])) # Turbulence production
-                d9=np.append(d9,   np.sum(diss_av[:edgen]/uinf[i]**3 *dely[:edgen])) # Dissipation due to mean strain MAYBE - normalised to 1/Ue3^3
-                d10=np.append(d10, np.sum(turbav[:edgen]/uinf[i]**3 *dely[:edgen])) # Turbulence production - normalised to 1/Ue3^3
+                # d9=np.append(d9,np.sum(diss_av[:edgen]/(ronow[edgen]*uinf[i]**3) *dely[:edgen])) # Dissipation due to mean strain normalised to 1/(roe Ue3^3)
+                # d10=np.append(d10,np.sum(turbav[:edgen]/(ronow[edgen]*uinf[i]**3) *dely[:edgen])) # Turbulence production normalised to 1/(roe Ue3^3)
+                d9=np.append(d9,   np.sum(diss_av[:edgen]/(uinf[i]**3) *dely[:edgen])) # Dissipation due to mean strain - normalised to 1/Ue3^3
+                d10=np.append(d10, np.sum(turbav[:edgen]/(uinf[i]**3) *dely[:edgen])) # Turbulence production - normalised to 1/Ue3^3
                 d11=np.append(d11, np.sum((turbav[:edgen] + diss_av[:edgen])*dely[:edgen])) # Dissipation coefficient cd using actual dissipation
                 d12=np.append(d12, np.sum((turbav[:edgen] + diss_model[:edgen])*dely[:edgen])) # Dissipation coefficient cd using turbulent viscosity modelled dissipation?
+                Retheta=np.append(Retheta, uinf[i]*np.sum(rvn[:edgen]*vdef[:edgen]*dely[:edgen])*ronow[edgen]/munow[edgen])
+                Retau=np.append(Retau, ut*np.sum(dely[:edgen])*ronow[edgen]/munow[edgen])
+                Res=np.append(Res, uinf[i]*SS[ns]*ronow[edgen]/munow[edgen])
+
+                beta=np.append(beta, np.sum(rvdef[:edgen]*dely[:edgen]) / tw) # Clauser parameter
+                K=np.append(K, munow[edgen]/(ronow[edgen]*uinf[i]**2)) # Pressure gradient parameter (acceleration parameter)
+                lamb=np.append(lamb, np.sum(rvn[:edgen]*vdef[:edgen]*dely[:edgen])**2 * munow[edgen]/ronow[edgen]) # Thwaites criterion
+                
+            BL_bool[nb] = np.stack(BL_bool[nb]) # stack to avoid a tuple of arrays
+            if nb==6:
+                BL_bool[nb] = BL_bool[nb][::-1,:] # flip for last SS block
                 
                    
     xLE = min(XX)
@@ -416,21 +520,44 @@ def boundarylayer(casename,*args):
     cax = xTE-xLE
     #
     xn = (XX-xLE)/cax
-    #
-    # ISS = ISS and (xn<0.95 and xn>0.05)
-    # IPS = IPS and (xn<0.95 and xn>0.05)
-    #
     
     bl = {}
     bl['ss'] = {}
     bl['ps'] = {}
+
     
     ISS = ISS > 0
     IPS = IPS > 0
-   
     
+
+    # ISS = (ISS>0) & (xn>0.05) & (xn<0.95)
+    # IPS = (IPS>0) & (xn>0.05) & (xn<0.95)
+
+    # Trim LE and TE where BL calcs become weird - use percentage of surface length
+    ISS = (ISS > 0) & (SS < 0.996 * SS[ISS].max()) & (SS > 0.02 * SS[ISS].max())
+    IPS = (IPS > 0) & (SS < 0.835 * SS[IPS].max()) & (SS > 0.02 * SS[IPS].max())
+
+
+    bl['Mask'] = BL_bool # Mask for loss breakdown
+
+    H = np.divide(d1, d2) # Shape factor
+        
+    yplus_profile = np.array(yplus_profile)
+    uplus_profile = np.array(uplus_profile)
+    r_profile = np.array(r_profile)
+    vel_profile = np.array(vel_profile)
+
+    # Gradients and final calcs for Clauser / acceleration param / Thwaites
+    beta[ISS] = beta[ISS] * np.gradient(Pe[ISS], SS[ISS])
+    K[ISS] = K[ISS] * np.gradient(Ue[ISS], SS[ISS])
+    lamb[ISS] = lamb[ISS] * np.gradient(Ue[ISS], SS[ISS])
+    beta[IPS] = beta[IPS] * np.gradient(Pe[IPS], SS[IPS])
+    K[IPS] = K[IPS] * np.gradient(Ue[IPS], SS[IPS])
+    lamb[IPS] = lamb[IPS] * np.gradient(Ue[IPS], SS[IPS])
+   
     bl['ss']['x'   ] = XX[ISS]
     bl['ss']['y'   ] = YY[ISS]
+    bl['ss']['s'   ] = SS[ISS]
     bl['ss']['d0'  ] = d0[ISS]
     bl['ss']['d1'  ] = d1[ISS]
     bl['ss']['d2'  ] = d2[ISS]
@@ -439,16 +566,29 @@ def boundarylayer(casename,*args):
     bl['ss']['d10'  ] = d10[ISS]
     bl['ss']['d11'  ] = d11[ISS]
     bl['ss']['d12'  ] = d12[ISS]
-    # bl['ss']['H'   ] = H_ss
+    bl['ss']['Retheta'  ] = Retheta[ISS]
+    bl['ss']['Retau'  ] = Retau[ISS]
+    bl['ss']['Res'  ] = Res[ISS]
+    bl['ss']['H'   ] = H[ISS]
     bl['ss']['cf'  ] = cf[ISS]
     bl['ss']['yplus'  ] = yplus[ISS]
     bl['ss']['xplus'  ] = xplus[ISS]
     bl['ss']['zplus'  ] = zplus[ISS]
     bl['ss']['tplus'  ] = tplus[ISS]
+    bl['ss']['x0'  ] = x0[ISS] # coords for edge of BL
+    bl['ss']['y0'  ] = y0[ISS] # coords for edge of BL
+    bl['ss']['beta'  ] = beta[ISS]
+    bl['ss']['K'  ] = K[ISS]
+    bl['ss']['lamb'  ] = lamb[ISS]
     
+    bl['ss']['yplus_profile'  ] = yplus_profile[ISS,:]
+    bl['ss']['uplus_profile'  ] = uplus_profile[ISS,:]
+    bl['ss']['r_profile'  ] = r_profile[ISS,:]
+    bl['ss']['vel_profile'  ] = vel_profile[ISS,:]
    
     bl['ps']['x'   ] = XX[IPS]
     bl['ps']['y'   ] = YY[IPS]
+    bl['ps']['s'   ] = SS[IPS]
     bl['ps']['d0'  ] = d0[IPS]
     bl['ps']['d1'  ] = d1[IPS]
     bl['ps']['d2'  ] = d2[IPS]
@@ -457,12 +597,25 @@ def boundarylayer(casename,*args):
     bl['ps']['d10'  ] = d10[IPS]
     bl['ps']['d11'  ] = d11[IPS]
     bl['ps']['d12'  ] = d12[IPS]
-    # bl['ps']['H'   ] = H_ps
+    bl['ps']['Retheta'  ] = Retheta[IPS]
+    bl['ps']['Retau'  ] = Retau[IPS]
+    bl['ps']['Res'  ] = Res[IPS]
+    bl['ps']['H'   ] = H[IPS]
     bl['ps']['cf'  ] = cf[IPS]
     bl['ps']['yplus'  ] = yplus[IPS]
     bl['ps']['xplus'  ] = xplus[IPS]
     bl['ps']['zplus'  ] = zplus[IPS]
     bl['ps']['tplus'  ] = tplus[IPS]
+    bl['ps']['x0'  ] = x0[IPS]
+    bl['ps']['y0'  ] = y0[IPS]
+    bl['ps']['beta'  ] = beta[IPS]
+    bl['ps']['K'  ] = K[IPS]
+    bl['ps']['lamb'  ] = lamb[IPS]
+
+    bl['ps']['yplus_profile'  ] = yplus_profile[IPS,:]
+    bl['ps']['uplus_profile'  ] = uplus_profile[IPS,:]
+    bl['ps']['r_profile'  ] = r_profile[IPS,:]
+    bl['ps']['vel_profile'  ] = vel_profile[IPS,:]
     
     return bl
 
